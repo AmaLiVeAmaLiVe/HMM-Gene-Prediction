@@ -175,3 +175,57 @@ def filter_genes_by_lod(pred_genes, test_seq: str, log_emiss, log_emiss_0th, lod
             filtered.append((start, end, length, score))
 
     return filtered
+
+
+def reverse_complement(dna: str) -> str:
+    """Returns the reverse complement of a DNA string"""
+    complement = str.maketrans("ACGTacgt", "TGCAtgca")
+
+    return dna.translate(complement)[::-1]
+
+
+def map_reverse_predictions(rev_pred_genes, seq_len: int):
+    """
+    Maps genes coordinates called on the reverse complement back 
+    to the forward reference coordinates
+    """
+    mapped = []
+    for r_start, r_end, length in rev_pred_genes:
+        f_start = seq_len - r_end
+        f_end = seq_len -  r_start
+
+        mapped.append((f_start, f_end, length, -1))    # Strand = -1 (Reversed Gene Strand)
+
+    return mapped
+
+
+def resolve_strand_overlaps(fwd_genes, rev_genes, max_allowed_overlap: int = 15):
+    """
+    Mergres forward and reverse predicted genes, pruning spruious antisense 
+    shadow calls where an ORF on one strand deeply overlaps an ORF on the other
+    """
+    # Annotate forward genes with strand = +1
+    all_genes = [(s, e, l, 1) for s, e, l in fwd_genes] + rev_genes
+
+    # Sort by start coordindate
+    all_genes.sort(key=lambda g: g[0])
+
+    kept = []
+    for g in all_genes:
+        if not kept:
+            kept.append(g)
+            continue
+        prev = kept[-1]
+
+        # Calculate overlap between consecutive predicted genes
+        overlap = min(prev[1], g[1]) - max(prev[0], g[0])
+
+        # If they are on the opposite strands and deeply overlap
+        if prev[3] != g[3] and overlap > max_allowed_overlap:
+            # Keep the longer ORF (longer ORFs have higher statistical validity)
+            if g[2] > prev[2]:
+                kept[-1] = g
+        else:
+            kept.append(g)
+
+    return [(s, e ,l) for s, e, l, _ in kept]

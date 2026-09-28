@@ -45,15 +45,17 @@ def parse_genome_and_labels_4state(gbk_path: str):
             start = int(feature.location.start)
             end = int(feature.location.end)
             strand = feature.location.strand
-
-            # Store ground truth boundaries (start, end, strand)
-            cds_features.append((start, end, strand))
-
-            # Label triplets in forward reading frame
-            length = end - start
-            for offset in range(length):
-                frame = (offset % 3) + 1       # Maps to 1, 2, 3
-                labels[start+offset] = frame
+            
+            # ONLY label forward-strand genes for the forward model!
+            if strand == 1:
+                cds_features.append((start, end, strand))
+                length = end - start
+                for offset in range(length):
+                    frame = (offset % 3) + 1
+                    labels[start + offset] = frame
+            else:
+                # Store reverse features separately so we know where they are
+                cds_features.append((start, end, strand))
 
     return dna_seq, labels, cds_features
 
