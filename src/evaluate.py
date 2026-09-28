@@ -32,61 +32,75 @@ def extract_predicted_genes(predicted_states: list, min_length_bp: int = 60):
     return genes
 
 
-def evaluate_gene_boundaries(true_genes: list, pred_genes: list, slack_bp: int = 6):
+def evaluate_gene_boundaries(test_cds, pred_genes, slack_bp: int = 6):
     """
-    Evaluates gene detection at the entity level:
-        - Exact start matches (within slack_bp)
-        - Exact stop matches (within slack_bp)
-        - Both ends match (fully recovered gene)
-        - Overlapping genes (overlap >= 50% reciprocal)
+    Evaluates predicted gene boundaries against ground truth CDS annotations.
     """
-    n_true = len(true_genes)
+    n_true = len(test_cds)
     n_pred = len(pred_genes)
-
+    
     if n_true == 0 or n_pred == 0:
-        return {"True Genes": n_true, "Predicted Genes": n_pred, 
-                "Exact Genes": 0, "Partial Matches": 0}
+        return {
+            "Annotated Genes in Test Set": n_true,
+            "Total Predicted Genes": n_pred,
+            "Exact Boundary Matches (Start & Stop)": 0,
+            "Start Codon Matches": 0,
+            "Stop Codon Matches": 0,
+            "Overlapping / Detected Genes": 0,
+            "Gene Sensitivity (Overlap)": 0.0,
+            "Gene Precision (Overlap)": 0.0,
+        }
 
-    matched_exact = 0
-    matched_starts = 0
-    matched_stops = 0
-    matched_overlap = 0
+    # 1. Sensitivity perspective: which true genes were detected?
+    detected_true = 0
+    exact_matches = 0
+    start_matches = 0
+    stop_matches = 0
 
-    for t_start, t_end in true_genes:
-        has_overlap = False
-        start_matched = False
-        end_matched = False
-
+    for t_start, t_end in test_cds:
+        t_hit = False
         for p_start, p_end, _ in pred_genes:
             # Overlap check
-            overlap = max(0, min(t_end, p_end) - max(t_start, p_start))
+            overlap = min(t_end, p_end) - max(t_start, p_start)
             if overlap > 0:
-                has_overlap = True
+                t_hit = True
+                
+            # Boundary checks (allowing small slack or exact 0)
+            if abs(t_start - p_start) <= slack_bp and abs(t_end - p_end) <= slack_bp:
+                exact_matches += 1
+                start_matches += 1
+                stop_matches += 1
+                break
+            elif abs(t_start - p_start) <= slack_bp:
+                start_matches += 1
+            elif abs(t_end - p_end) <= slack_bp:
+                stop_matches += 1
+                
+        if t_hit:
+            detected_true += 1
 
-            # Boundary checks with tolerance
-            if abs(t_start - p_start) <= slack_bp:
-                start_matched = True
-            if abs(t_end - p_end) <= slack_bp:
-                end_matched = True
+    # 2. Precision perspective: which predicted genes hit a real gene?
+    valid_predictions = 0
+    for p_start, p_end, _ in pred_genes:
+        for t_start, t_end in test_cds:
+            overlap = min(t_end, p_end) - max(t_start, p_start)
+            if overlap > 0:
+                valid_predictions += 1
+                break  # Count this prediction at most once
 
-        if has_overlap:
-            matched_overlap += 1
-        if start_matched:
-            matched_starts += 1
-        if end_matched:
-            matched_stops += 1
-        if start_matched and end_matched:
-            matched_exact += 1
+    sensitivity = (detected_true / n_true) * 100.0
+    precision = (valid_predictions / n_pred) * 100.0
 
     return {
         "Annotated Genes in Test Set": n_true,
         "Total Predicted Genes": n_pred,
-        "Exact Boundary Matches (Start & Stop)": matched_exact,
-        "Start Codon Matches": matched_starts,
-        "Stop Codon Matches": matched_stops,
-        "Overlapping / Detected Genes": matched_overlap,
-        "Gene Sensitivity (Overlap)": (matched_overlap / n_true) * 100 if n_true else 0.0,
-        "Gene Precision (Overlap)": (matched_overlap / n_pred) * 100 if n_pred else 0.0
+        "Exact Boundary Matches (Start & Stop)": exact_matches,
+        "Start Codon Matches": start_matches,
+        "Stop Codon Matches": stop_matches,
+        "Overlapping / Detected Genes": detected_true,
+        "Valid Predictions (Hits True CDS)": valid_predictions,
+        "Gene Sensitivity (Overlap)": sensitivity,
+        "Gene Precision (Overlap)": precision,
     }
 
 
@@ -113,17 +127,51 @@ def evaluate_nucleotide_level(true_binary: np.ndarray, pred_binary: np.ndarray):
         }
 
 
-def print_evaluation_report(metrics: dict):
-    print("\n" + "="*45)
-    print("GENE PREDICTION EVALUATION REPORT")
-    print("="*45)
+def compute_orf_lod_score(dna_segment: str, log_emiss_c3, log_emiss_0th) -> float:
+    """
+    Calculates the cumulative Log-Odds score comparing coding vs. non-coding likelihood
+    for an in-frame triplet sequence
+    """
+    char_map = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
+    seq = dna_segment.upper()
+    L = len(seq)
 
-    for key, val in metrics.items():
-        if key == "Confusion Matrix":
-            print("\nConfusion Matrix:")
-            for cm_key, cm_val in val.items():
-                print(f"{cm_key}: {cm_val:,}")
-        else:
-            print(f"{key:22}: {val*100:6.2f}%")
+    if L % 3 != 0 or L < 6:
+        return -999.0
 
-    print("="*45 + "\n")
+    lod_total = 0.0
+
+    # Iterate codon by codod
+    for idx in range(0, L, 3):
+        c1, c2, c3 = seq[idx], seq[idx+1], seq[idx+2]
+        if any (base not in char_map for base in (c1, c2, c3)):
+            continue
+
+        i1, i2, i3 = char_map[c1], char_map[c2], char_map[c3]
+
+        # P(Codon Base 3 | Base 1, Base 2, State 3)
+        log_p_coding = log_emiss_c3[i1, i2, i3]
+
+        # P(Codon Base 3 | Background State 0)
+        log_p_bg = log_emiss_0th[0, i3]
+
+        lod_total += (log_p_coding - log_p_bg)
+
+    return lod_total
+
+
+def filter_genes_by_lod(pred_genes, test_seq: str, log_emiss, log_emiss_0th, lod_threshold: float = 0.9):
+    """
+    Filters out predicted ORFs whose coding log-odds score doens not exceed the threshold
+    """
+    # log_emiss[3] Corresponds to State C3 (Codon Position 3)
+    log_emiss_c3 = log_emiss[3]
+
+    filtered = []
+    for start, end, length in pred_genes:
+        orf_seq = test_seq[start:end]
+        score = compute_orf_lod_score(orf_seq, log_emiss_c3, log_emiss_0th)
+        if score > lod_threshold:
+            filtered.append((start, end, length, score))
+
+    return filtered
