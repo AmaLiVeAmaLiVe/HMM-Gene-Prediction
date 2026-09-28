@@ -46,8 +46,8 @@ def main():
         description="Ab initio Bacterial Gene Predictor (Dual-Strand 2nd-Order HMM + Shine-Dalgarno)"
     )
     parser.add_argument("--input", "-i", required=True, help="Path to input raw FASTA file")
-    parser.add_argument("--output", "-o", default="data/test/output_predictions.gff3", help="Output GFF3 file path")
-    parser.add_argument("--proteins", "-p", default="data/test/output_proteins.faa", help="Output protein FASTA path")
+    parser.add_argument("--output", "-o", default="output/predictions.gff3", help="Output GFF3 file path (default: output/predictions.gff3)")
+    parser.add_argument("--proteins", "-p", default="output/proteins.faa", help="Output protein FASTA path (default: output/proteins.faa)")
     parser.add_argument("--model", "-m", default=DEFAULT_MODEL_PATH, help="Path to pre-trained .npz model file")
     parser.add_argument("--train", action="store_true", help="Force retrain the model before prediction")
     parser.add_argument("--ref-genome", default="NC_000913.3", help="NCBI Accession to train on if model is missing or --train is set")
@@ -126,6 +126,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    for record in SeqIO.parse("data/test/output_proteins.faa", "fasta"):
-        print(f"ID: {record.id} | Amino Acids: {len(record.seq)} | Starts with Met: {record.seq.startswith('M')}")

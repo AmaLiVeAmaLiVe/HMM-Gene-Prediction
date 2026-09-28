@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from src.hmm_model import HMMGenePredictor2ndOrder
 
 

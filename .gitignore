@@ -22,6 +22,8 @@ data/processed/*
 !data/processed/.gitkeep
 
 # Generated test and prediction outputs
+output/*
+!output/.gitkeep
 data/production_test/
 data/test/output_*
 data/test/validation_*
