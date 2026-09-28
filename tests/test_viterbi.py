@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from src.hmm_model import HMMGenePredictor
+from src.hmm_model import HMMGenePredictor2ndOrder
 
 
 def test_viterbi_synthetic_gc_island():
@@ -26,7 +26,7 @@ def test_viterbi_synthetic_gc_island():
     ])
     log_emiss = np.log(emiss)
 
-    model = HMMGenePredictor(
+    model = HMMGenePredictor2ndOrder(
         states=states,
         log_initial=log_initial,
         log_trans=log_trans,
