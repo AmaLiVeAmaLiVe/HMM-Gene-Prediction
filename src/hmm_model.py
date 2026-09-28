@@ -19,6 +19,29 @@ class HMMGenePredictor2ndOrder:
         self.start_codons = {"ATG", "GTG", "TTG"}
         self.stop_codons = {"TAA", "TAG", "TGA"}
 
+    @staticmethod
+    def calculate_rbs_bonus(upstream_window: str) -> float:
+        """
+        Scans the -15 to -4 bp region upstream of an ATG/GTG/TTG start codon
+        for Shine-Dalgarno core consensus motifs.
+        """
+        # Core Shine-Dalgarno motifs and their empirical log-odds weights
+        rbs_motifs = {
+            "AGGAGG": 3.5,
+            "GGAGG":  3.0,
+            "AGGAG":  2.8,
+            "GAGG":   2.2,
+            "AGGA":   2.0,
+            "GGAG":   1.8
+        }
+        
+        bonus = 0.0
+        for motif, weight in rbs_motifs.items():
+            if motif in upstream_window:
+                bonus = max(bonus, weight)
+                
+        return bonus
+
     def viterbi(self, sequence: str):
         T = len(sequence)
         K = self.n_states
@@ -38,8 +61,8 @@ class HMMGenePredictor2ndOrder:
             if t == 1:
                 emiss_col = self.log_emiss_0th[:, curr_base]
             else:
-                p2 = obs[t - 2]
-                p1 = obs[t - 1]
+                p2 = obs[t-2]
+                p1 = obs[t-1]
                 emiss_col = self.log_emiss[:, p2, p1, curr_base]
 
             for j in range(K):
@@ -51,13 +74,25 @@ class HMMGenePredictor2ndOrder:
                     if trans_score <= NEG_INF / 2:
                         continue
 
+                    # Bonus/weight modifiers
+                    bonus = 0.0
+
                     # Rule 1: Entering a gene (0 -> C1)
                     # The upcoming codon starting at t must be a valid start codon
                     if i == 0 and j == 1:
                         if t + 2 < T:
-                            start_trip = sequence[t : t + 3]
+                            start_trip = sequence[t : t+3]
                             if start_trip not in self.start_codons:
                                 continue
+
+                            # Check upstream window (-15 to -4) for Shine-Dalgarno sequence
+                            if t >= 15:
+                                upstream = sequence[t-15 : t-4]
+                                bonus += self.calculate_rbs_bonus(upstream)
+
+                            # Favor canonical ATG over rarer GTG/TTG starts
+                            start_weight = 1.0 if start_trip == "ATG" else 0.3
+                            bonus += np.log(start_weight)
                         else:
                             continue
 
@@ -65,7 +100,7 @@ class HMMGenePredictor2ndOrder:
                     # At index t (first intergenic base), the codon that finished at t-1 was sequence[t-3:t]
                     if i == 3 and j == 0:
                         if t >= 3:
-                            last_codon = sequence[t - 3 : t]
+                            last_codon = sequence[t-3 : t]
                             if last_codon not in self.stop_codons:
                                 continue
                         else:
@@ -75,11 +110,11 @@ class HMMGenePredictor2ndOrder:
                     # The codon that just completed cannot be a stop codon
                     if i == 3 and j == 1:
                         if t >= 3:
-                            last_codon = sequence[t - 3 : t]
+                            last_codon = sequence[t-3 : t]
                             if last_codon in self.stop_codons:
                                 continue
 
-                    score = v_table[t - 1, i] + trans_score
+                    score = v_table[t-1, i] + trans_score + bonus
                     if score > best_val:
                         best_val = score
                         best_prev = i
@@ -92,6 +127,6 @@ class HMMGenePredictor2ndOrder:
         best_path[-1] = np.argmax(v_table[-1, :])
 
         for t in range(T - 2, -1, -1):
-            best_path[t] = backpointer[t + 1, best_path[t + 1]]
+            best_path[t] = backpointer[t+1, best_path[t+1]]
 
         return [self.states[idx] for idx in best_path]

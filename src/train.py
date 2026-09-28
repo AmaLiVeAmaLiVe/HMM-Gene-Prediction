@@ -8,7 +8,7 @@ NEG_INF = -1e9
 def train_2nd_order_hmm(train_seq: str, train_labels: np.ndarray, alphabet: str = "ACGT"):
     """
     Trains a 4-state HMM with the 2nd-order Markov emission:
-        States: 0: Intergenic, 1 (Coding): C1, C2, C3
+        States: 0: Intergenic, 1: C1, 2: C2, 3: C3
         Emissions: P(X_t | X_{t-2}, X_{t-1}, Curr_state)
     """
     n_states = 4
@@ -52,7 +52,7 @@ def train_2nd_order_hmm(train_seq: str, train_labels: np.ndarray, alphabet: str 
     # State 0 (Intergenic) -> Stay in 0 or enter C1
     total_0 = trans_counts[0, 0] + trans_counts[0, 1] + 2.0
     log_trans[0, 0] = np.log((trans_counts[0, 0] + 1.0) / total_0)
-    log_trans[0, 1] = np.log((trans_counts[0, 1] + 1.0) / total_0)
+    log_trans[0, 1] = np.log((trans_counts[0, 1] + 1.0) / total_0) - 2.0
 
     # State 1 (C1) -> Must go to C2
     log_trans[1, 2] = 0.0

@@ -52,7 +52,7 @@ def main():
     
     print("[5/5] Computing Performance Reports...")
     nuc_metrics = evaluate_nucleotide_level(test_binary_true, test_binary_pred)
-    pred_genes = extract_predicted_genes(predicted_path, min_length_bp=90)
+    pred_genes = extract_predicted_genes(predicted_path, min_length_bp=180)
     gene_metrics = evaluate_gene_boundaries(test_cds, pred_genes, slack_bp=6)
     
     print("\n" + "=" * 55)
@@ -78,7 +78,7 @@ def main():
         stop_trip = test_seq[g_end - 3 : g_end]
         print(f"  Gene {idx:02d}: {g_start:6d} to {g_end:6d} ({g_len:4d} bp) | Start: {start_trip} | Stop: {stop_trip}")
     print("=" * 55 + "\n")
-
+    
 
 if __name__ == "__main__":
     main()
