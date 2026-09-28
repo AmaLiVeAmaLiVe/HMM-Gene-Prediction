@@ -15,10 +15,19 @@ __pycache__/
 htmlcov/
 
 # Raw data / large genomic downloads
+# Raw genomic data and downloads
 data/raw/*
 !data/raw/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+
+# Generated test and prediction outputs
+data/production_test/
+data/test/output_*
+data/test/validation_*
+data/test/NC_*
+*.gff3
+*.faa
 
 # IDEs and OS
 .vscode/

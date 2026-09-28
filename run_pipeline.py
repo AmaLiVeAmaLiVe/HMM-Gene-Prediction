@@ -14,7 +14,7 @@ from src.evaluate import (
 
 
 def main():
-    accession = "NC_000908.2"  # E. coli K-12
+    accession = "NC_000913.3"  # E. coli K-12
     print(f"[1/5] Loading {accession} and Parsing CDS Features...")
     gbk_path = download_genome_data(accession, output_dir="data/raw")
     dna_seq, labels, cds_features = parse_genome_and_labels_4state(gbk_path)

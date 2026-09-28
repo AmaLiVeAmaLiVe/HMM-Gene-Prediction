@@ -228,4 +228,4 @@ def resolve_strand_overlaps(fwd_genes, rev_genes, max_allowed_overlap: int = 15)
         else:
             kept.append(g)
 
-    return [(s, e ,l) for s, e, l, _ in kept]
+    return [(s, e ,l, st) for s, e, l, st in kept]

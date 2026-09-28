@@ -1,4 +1,8 @@
+import os
 import numpy as np
+
+from src.data_loader import download_genome_data, parse_genome_and_labels_4state
+from src.hmm_model import HMMGenePredictor2ndOrder
 
 
 # Constant representation of 0 probability
@@ -71,3 +75,54 @@ def train_2nd_order_hmm(train_seq: str, train_labels: np.ndarray, alphabet: str 
     log_initial[1] = np.log(0.1)
 
     return log_initial, log_trans, log_emiss, log_emiss_0th
+
+
+def train_and_save_model(
+    reference_accession: str = "NC_000913.3",
+    output_path: str = "models/ecoli_model.npz"
+) -> str:
+    """
+    Downloads reference genome data, trains 2nd-order HMM parameters,
+    and serializes them to a compressed .npz archive.
+    """
+    print(f"[*] Training model using reference genome: {reference_accession}...")
+    gbk_path = download_genome_data(reference_accession, output_dir="data/raw")
+    ref_dna, ref_labels, _ = parse_genome_and_labels_4state(gbk_path)
+
+    log_initial, log_trans, log_emiss, log_emiss_0th = train_2nd_order_hmm(ref_dna, ref_labels)
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    np.savez_compressed(
+        output_path,
+        log_initial=log_initial,
+        log_trans=log_trans,
+        log_emiss=log_emiss,
+        log_emiss_0th=log_emiss_0th
+    )
+    print(f"[+] Model weights successfully written to: {output_path}")
+
+    return output_path
+
+
+def load_trained_model(model_path: str = "models/ecoli_model.npz") -> HMMGenePredictor2ndOrder:
+    """
+    Loads pre-trained HMM parameters from disk and constructs an initialized predictor.
+    Raises FileNotFoundError if the archive does not exist.
+    """
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f"Pre-trained model not found at '{model_path}'. "
+            f"Run training first or pass --train."
+        )
+
+    print(f"[*] Loading pre-trained model from: {model_path}")
+    data = np.load(model_path)
+
+    states = ["INTERGENIC", "C1", "C2", "C3"]
+    return HMMGenePredictor2ndOrder(
+        states=states,
+        log_initial=data["log_initial"],
+        log_trans=data["log_trans"],
+        log_emiss=data["log_emiss"],
+        log_emiss_0th=data["log_emiss_0th"]
+    )
