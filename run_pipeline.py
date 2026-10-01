@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 
 from src.data_loader import download_genome_data, parse_genome_and_labels_4state, create_train_test_split
@@ -7,18 +8,34 @@ from src.evaluate import (
     extract_predicted_genes, 
     evaluate_gene_boundaries, 
     evaluate_nucleotide_level,
-    reverse_complement,
     map_reverse_predictions,
     resolve_strand_overlaps
 )
+from src.utils import reverse_complement
 
 
 def main():
-    accession = "NC_000913.3"  # E. coli K-12
-    print(f"[1/5] Loading {accession} and Parsing CDS Features...")
+    parser = argparse.ArgumentParser(description="Benchmark HMM Gene Predictor against NCBI Ground Truth")
+    parser.add_argument("--accession", "-a", default="NC_000913.3", help="NCBI Accession (e.g. NC_000913.3, NC_000908.2)")
+    parser.add_argument("-g", "--translation-table", type=int, choices=[11, 4], help="Genetic code table (11=Standard, 4=Mycoplasma)")
+    args = parser.parse_args()
+
+    accession = args.accession
+    table_id = args.translation_table
+
     gbk_path = download_genome_data(accession, output_dir="data/raw")
-    dna_seq, labels, cds_features = parse_genome_and_labels_4state(gbk_path)
-    
+    dna_seq, labels, cds_features, metadata_table = parse_genome_and_labels_4state(gbk_path)
+
+    # Resolve active translation table
+    if args.translation_table is not None:
+        table_id = args.translation_table
+        print(f"      -> Translation table explicitly set to: Table {table_id}")
+    else:
+        table_id = metadata_table
+        print(f"      -> Translation table auto-detected from metadata: Table {table_id}")
+
+    print(f"[1/5] Loading {accession} (Table {table_id}) and Parsing CDS Features...")
+        
     print("[2/5] Creating 80/20 Train/Test Split...")
     train_seq, train_labels, test_seq, test_labels, split_pos = create_train_test_split(
         dna_seq, labels, train_ratio=0.8
@@ -45,6 +62,7 @@ def main():
         log_trans=log_trans,
         log_emiss=log_emiss,
         log_emiss_0th=log_emiss_0th,
+        table_id=table_id,
         alphabet="ACGT"
     )
     
@@ -73,7 +91,8 @@ def main():
         true_dual_mask[max(0, g_start):min(L_test, g_end)] = 1
         
     pred_dual_mask = np.zeros(L_test, dtype=np.int32)
-    for g_start, g_end, _ in combined_genes:
+    # Unpack 4 items (start, end, length, strand)
+    for g_start, g_end, _, _ in combined_genes:
         pred_dual_mask[max(0, g_start):min(L_test, g_end)] = 1
 
     print("[5/5] Computing Performance Reports (Both Strands Combined)...")
@@ -81,15 +100,15 @@ def main():
     gene_metrics = evaluate_gene_boundaries(all_test_cds, combined_genes, slack_bp=6)
     
     print("\n" + "=" * 55)
-    print("       NUCLEOTIDE-LEVEL EVALUATION (DUAL STRAND) ")
+    print(f"   NUCLEOTIDE-LEVEL EVALUATION (Table {table_id})")
     print("=" * 55)
     for k, v in nuc_metrics.items():
         if k != "Confusion Matrix":
             print(f"{k:35}: {v:6.2f}%")
-    print("\nConfusion Matrix:", nuc_metrics["Confusion Matrix"])
+    print("\nConfusion Matrix:\n", nuc_metrics["Confusion Matrix"])
     
     print("\n" + "=" * 55)
-    print("         GENE-LEVEL EVALUATION (DUAL STRAND)     ")
+    print(f"     GENE-LEVEL EVALUATION (Table {table_id})")
     print("=" * 55)
     for k, v in gene_metrics.items():
         if isinstance(v, float):
@@ -98,8 +117,10 @@ def main():
             print(f"{k:35}: {v}")
             
     print("\nFirst 5 Predicted Genes on Forward Reference Coordinates:")
-    for idx, (g_start, g_end, g_len) in enumerate(combined_genes[:5], 1):
-        print(f"  Gene {idx:02d}: {g_start:6d} to {g_end:6d} ({g_len:4d} bp)")
+    # Unpack 4 items (start, end, length, strand)
+    for idx, (g_start, g_end, g_len, st) in enumerate(combined_genes[:5], 1):
+        st_char = "+" if st == 1 else "-"
+        print(f"  Gene {idx:02d}: {g_start:6d} to {g_end:6d} ({g_len:4d} bp) [strand {st_char}]")
     print("=" * 55 + "\n")
 
 

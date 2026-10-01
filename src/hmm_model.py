@@ -1,11 +1,13 @@
 import numpy as np
 
+from src.utils import get_table_config
+
 
 NEG_INF = -1e9
 
 
 class HMMGenePredictor2ndOrder:
-    def __init__(self, states, log_initial, log_trans, log_emiss, log_emiss_0th, alphabet="ACGT"):
+    def __init__(self, states, log_initial, log_trans, log_emiss, log_emiss_0th, table_id: int = 11, alphabet="ACGT"):
         self.states = states
         self.n_states = len(states)
         self.log_initial = log_initial
@@ -14,10 +16,14 @@ class HMMGenePredictor2ndOrder:
         self.log_emiss_0th = log_emiss_0th  # Shape: (n_states, 4)
         self.alphabet = alphabet
         self.char_map = {char: idx for idx, char in enumerate(alphabet)}
+
+
+        # Configure boundary codons dynamically based on translation table
+        self.table_id = table_id
+        config = get_table_config(table_id)
+        self.stop_codons = config["stop_codons"]
+        self.start_codons = config["start_codons"]
         
-        # Valid biological signals in bacteria (forward strand)
-        self.start_codons = {"ATG", "GTG", "TTG"}
-        self.stop_codons = {"TAA", "TAG", "TGA"}
 
     @staticmethod
     def calculate_rbs_bonus(upstream_window: str) -> float:

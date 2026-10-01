@@ -104,10 +104,10 @@ def train_and_save_model(
     return output_path
 
 
-def load_trained_model(model_path: str = "models/ecoli_model.npz") -> HMMGenePredictor2ndOrder:
+def load_trained_model(model_path: str = "models/ecoli_model.npz", table_id: int = 11) -> HMMGenePredictor2ndOrder:
     """
-    Loads pre-trained HMM parameters from disk and constructs an initialized predictor.
-    Raises FileNotFoundError if the archive does not exist.
+    Loads pre-trained HMM parameters from disk and initializes the predictor 
+    with the selected translation table.
     """
     if not os.path.exists(model_path):
         raise FileNotFoundError(
@@ -124,5 +124,6 @@ def load_trained_model(model_path: str = "models/ecoli_model.npz") -> HMMGenePre
         log_initial=data["log_initial"],
         log_trans=data["log_trans"],
         log_emiss=data["log_emiss"],
-        log_emiss_0th=data["log_emiss_0th"]
+        log_emiss_0th=data["log_emiss_0th"],
+        table_id=table_id
     )

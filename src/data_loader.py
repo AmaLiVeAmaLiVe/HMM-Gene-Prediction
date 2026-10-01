@@ -39,9 +39,17 @@ def parse_genome_and_labels_4state(gbk_path: str):
 
     labels = np.zeros(seq_len, dtype=np.int32)
     cds_features = []
+    detected_table = 11  # Default standard bacterial
 
     for feature in record.features:
         if feature.type == "CDS":
+            # Extract transl_table qualifier if present
+            if "transl_table" in feature.qualifiers:
+                try:
+                    detected_table = int(feature.qualifiers["transl_table"][0])
+                except (ValueError, IndexError):
+                    pass
+
             start = int(feature.location.start)
             end = int(feature.location.end)
             strand = feature.location.strand
@@ -57,7 +65,7 @@ def parse_genome_and_labels_4state(gbk_path: str):
                 # Store reverse features separately so we know where they are
                 cds_features.append((start, end, strand))
 
-    return dna_seq, labels, cds_features
+    return dna_seq, labels, cds_features, detected_table
 
 
 def create_train_test_split(dna_seq: str, labels: np.ndarray, train_ratio: float = 0.8):

@@ -52,6 +52,7 @@ def main():
     parser.add_argument("--train", action="store_true", help="Force retrain the model before prediction")
     parser.add_argument("--ref-genome", default="NC_000913.3", help="NCBI Accession to train on if model is missing or --train is set")
     parser.add_argument("--min-len", type=int, default=180, help="Minimum ORF length in base pairs (default: 180)")
+    parser.add_argument("--translation-table", "-g", type=int, default=11, choices=[11, 4], help="Genetic code translation table (default: 11 - for standard bacteria/archaea, 4 - for Mycoplasma/Spiroplasma)")
 
     args = parser.parse_args()
 
@@ -65,7 +66,7 @@ def main():
         print(f"[*] Pre-trained model '{args.model}' not found. Training on reference ({args.ref_genome})...")
         train_and_save_model(reference_accession=args.ref_genome, output_path=args.model)
 
-    model = load_trained_model(args.model)
+    model = load_trained_model(args.model, table_id=args.translation_table)
 
     # Ensure output directories exist
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
@@ -102,7 +103,7 @@ def main():
             else:
                 gene_dna = reverse_complement(contig_seq[start:end])
 
-            protein_seq = translate_dna(gene_dna)
+            protein_seq = translate_dna(gene_dna, table_id=args.translation_table)
             header = f">{contig_id}_{gene_name} [location={start + 1}..{end}] [strand={strand_char}] [length={len(protein_seq)}aa]"
             all_protein_lines.append(f"{header}\n{protein_seq}\n")
 

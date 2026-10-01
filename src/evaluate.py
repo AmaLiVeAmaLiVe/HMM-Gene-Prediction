@@ -59,7 +59,7 @@ def evaluate_gene_boundaries(test_cds, pred_genes, slack_bp: int = 6):
 
     for t_start, t_end in test_cds:
         t_hit = False
-        for p_start, p_end, _ in pred_genes:
+        for p_start, p_end, *_ in pred_genes:
             # Overlap check
             overlap = min(t_end, p_end) - max(t_start, p_start)
             if overlap > 0:
@@ -81,7 +81,7 @@ def evaluate_gene_boundaries(test_cds, pred_genes, slack_bp: int = 6):
 
     # 2. Precision perspective: which predicted genes hit a real gene?
     valid_predictions = 0
-    for p_start, p_end, _ in pred_genes:
+    for p_start, p_end, *_ in pred_genes:
         for t_start, t_end in test_cds:
             overlap = min(t_end, p_end) - max(t_start, p_start)
             if overlap > 0:
