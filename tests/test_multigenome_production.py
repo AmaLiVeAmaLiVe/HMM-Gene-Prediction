@@ -1,5 +1,3 @@
-# tests/test_multi_genome_production.py
-
 import os
 import sys
 import subprocess

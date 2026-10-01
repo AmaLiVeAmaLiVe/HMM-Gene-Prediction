@@ -1,5 +1,3 @@
-# tests/test_production_accuracy.py
-
 import os
 import sys
 import subprocess

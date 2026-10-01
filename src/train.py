@@ -3,10 +3,85 @@ import numpy as np
 
 from src.data_loader import download_genome_data, parse_genome_and_labels_4state
 from src.hmm_model import HMMGenePredictor2ndOrder
+from src.utils import get_table_config
 
 
 # Constant representation of 0 probability
 NEG_INF = -1e9
+
+
+def extract_unambiguous_orfs(sequence: str, table_id: int = 11, min_len_bp: int = 500):
+    """
+    Scans forward and reverse strands of an unannotated sequence for long ORFs.
+    In prokaryotes, ORFs >= 500 bp without internal stop codons are statistically
+    almost certain (>99%) to represent authentic protein-coding genes.
+    """
+    config = get_table_config(table_id)
+    stop_codons = config["stop_codons"]
+    start_codons = config["start_codons"]
+
+    seq = sequence.upper()
+    L = len(seq)
+    candidate_orfs = []
+
+    # 1. Forward 3 frames
+    for frame in range(3):
+        in_orf = False
+        orf_start = 0
+        for i in range(frame, L - 2, 3):
+            codon = seq[i:i + 3]
+            if not in_orf and codon in start_codons:
+                in_orf = True
+                orf_start = i
+            elif in_orf and codon in stop_codons:
+                orf_end = i + 3
+                if (orf_end - orf_start) >= min_len_bp:
+                    candidate_orfs.append((orf_start, orf_end, 1))
+                in_orf = False
+
+    return candidate_orfs
+
+
+def dynamic_self_train(sequence: str, table_id: int = 11, min_len_bp: int = 500):
+    """
+    Unsupervised ab initio parameter estimation directly from input sequence.
+    Mines long unambiguous ORFs, builds empirical 4-state labels, and derives
+    2nd-order emission and transition matrices on the fly.
+    """
+    seq = sequence.upper()
+    L = len(seq)
+
+    long_orfs = extract_unambiguous_orfs(seq, table_id=table_id, min_len_bp=min_len_bp)
+
+    # Need sufficient statistical power to estimate 2nd-order frequencies (64 x 4 cells)
+    if len(long_orfs) < 20:
+        raise ValueError(
+            f"Insufficient long ORFs found ({len(long_orfs)} found, need at least 20 of length >= {min_len_bp} bp). "
+            f"Input sequence is too short for reliable self-training."
+        )
+
+    # Create 4-state label array from confident coding regions
+    labels = np.zeros(L, dtype=np.int32)
+    for start, end, strand in long_orfs:
+        for pos in range(start, end):
+            codon_pos = (pos - start) % 3
+            labels[pos] = codon_pos + 1  # 1=C1, 2=C2, 3=C3
+
+    # Derive 2nd-order parameters using existing trainer
+    log_initial, log_trans, log_emiss, log_emiss_0th = train_2nd_order_hmm(seq, labels)
+
+    states = ["INTERGENIC", "C1", "C2", "C3"]
+    model = HMMGenePredictor2ndOrder(
+        states=states,
+        log_initial=log_initial,
+        log_trans=log_trans,
+        log_emiss=log_emiss,
+        log_emiss_0th=log_emiss_0th,
+        table_id=table_id,
+        alphabet="ACGT"
+    )
+
+    return model, len(long_orfs)
 
 
 def train_2nd_order_hmm(train_seq: str, train_labels: np.ndarray, alphabet: str = "ACGT"):

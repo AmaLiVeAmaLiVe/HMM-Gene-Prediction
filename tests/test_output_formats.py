@@ -1,5 +1,3 @@
-# tests/test_output_formats.py
-
 import os
 from Bio import SeqIO
 
