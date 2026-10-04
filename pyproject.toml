@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hmm-gene-predictor"
+version = "1.0.0"
+description = "Ab initio prokaryotic gene identification pipeline using higher-order cyclical HMMs"
+authors = [
+    { name = "AmaLiVe" }
+]
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Intended Audience :: Science/Research",
+]
+dependencies = [
+    "numpy>=1.22.0",
+    "biopython>=1.79",
+    "matplotlib>=3.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "jupyter>=1.0.0",
+]
+
+[project.scripts]
+hmm-predict = "predict:main"
+hmm-benchmark = "run_pipeline:main"
+
+[tool.setuptools]
+py-modules = ["predict", "run_pipeline"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "models*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.npz"]

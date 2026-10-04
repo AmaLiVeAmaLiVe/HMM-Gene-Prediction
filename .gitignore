@@ -37,3 +37,11 @@ data/test/NC_*
 .DS_Store
 Thumbs.db
 
+# Packaging and build artifacts
+*.egg-info/
+build/
+dist/
+*.dll
+*.so
+*.dylib
+
